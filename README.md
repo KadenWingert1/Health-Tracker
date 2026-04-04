@@ -1,6 +1,6 @@
 # Weight Tracker
 
-This Streamlit app is optimized for mobile use and stores weight data in a Google Sheet.
+This Streamlit app is optimized for mobile use and stores weight and lifting data in Google Sheets.
 
 ## Files
 
