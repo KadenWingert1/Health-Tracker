@@ -323,6 +323,7 @@ with lifts_tab:
             "Show lifts on chart",
             options=["Bench", "Squat", "Deadlift"],
             default=["Bench", "Squat", "Deadlift"],
+            key="chart_lift_selector",
         )
 
         filtered_lifts = lifts_df[lifts_df["lift"].isin(selected_lifts)].copy()
@@ -339,29 +340,31 @@ with lifts_tab:
                 y_label="Max Weight (lb)",
             )
 
-        st.subheader("Bench History")
-        st.dataframe(
-            lifts_df[lifts_df["lift"] == "Bench"].reset_index(drop=True),
-            use_container_width=True,
-            hide_index=True,
+        st.subheader("Lifting History")
+        history_selection = st.multiselect(
+            "Choose lifts to view and edit",
+            options=["Bench", "Squat", "Deadlift"],
+            default=["Bench", "Squat", "Deadlift"],
+            key="history_lift_selector",
         )
-
-        st.subheader("Squat History")
+        visible_lifts = lifts_df[lifts_df["lift"].isin(history_selection)].copy()
         st.dataframe(
-            lifts_df[lifts_df["lift"] == "Squat"].reset_index(drop=True),
-            use_container_width=True,
-            hide_index=True,
-        )
-
-        st.subheader("Deadlift History")
-        st.dataframe(
-            lifts_df[lifts_df["lift"] == "Deadlift"].reset_index(drop=True),
+            visible_lifts.reset_index(drop=True),
             use_container_width=True,
             hide_index=True,
         )
 
     st.subheader("Edit Lifting Entries")
     editable_lifts = lifts_df.copy()
+    if not editable_lifts.empty:
+        selected_for_editing = st.multiselect(
+            "Choose lifts to edit",
+            options=["Bench", "Squat", "Deadlift"],
+            default=["Bench", "Squat", "Deadlift"],
+            key="edit_lift_selector",
+        )
+        editable_lifts = editable_lifts[editable_lifts["lift"].isin(selected_for_editing)].copy()
+
     if not editable_lifts.empty:
         editable_lifts["date"] = pd.to_datetime(editable_lifts["date"], errors="coerce")
 
@@ -383,12 +386,16 @@ with lifts_tab:
 
     if st.button("Save Lifting Table", use_container_width=True):
         try:
-            to_save = edited_lifts.copy()
-            to_save["date"] = pd.to_datetime(to_save["date"], errors="coerce").dt.date
-            to_save["date"] = to_save["date"].map(
+            edited_subset = edited_lifts.copy()
+            edited_subset["date"] = pd.to_datetime(edited_subset["date"], errors="coerce").dt.date
+            edited_subset["date"] = edited_subset["date"].map(
                 lambda value: value.isoformat() if pd.notna(value) else None
             )
-            save_lifts(to_save)
+
+            full_dataset = load_lifts()
+            untouched_rows = full_dataset[~full_dataset["lift"].isin(selected_for_editing)].copy()
+            combined = pd.concat([untouched_rows, edited_subset], ignore_index=True)
+            save_lifts(combined)
         except Exception as exc:
             st.error(f"Could not save lifting changes: {exc}")
         else:
