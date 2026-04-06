@@ -5,6 +5,7 @@ from datetime import date
 import pandas as pd
 import plotly.express as px
 import streamlit as st
+import streamlit.components.v1 as components
 from gspread.exceptions import WorksheetNotFound
 from streamlit_gsheets import GSheetsConnection
 
@@ -24,6 +25,77 @@ BORDER = "#D0D5DD"
 
 
 st.set_page_config(page_title="Health Tracker", page_icon="🏋️", layout="centered")
+
+
+def inject_app_icons() -> None:
+    components.html(
+        """
+        <script>
+        (function () {
+          const doc = window.parent.document;
+          const existing = doc.getElementById("health-tracker-icons");
+          if (existing) existing.remove();
+
+          const canvas = doc.createElement("canvas");
+          canvas.width = 512;
+          canvas.height = 512;
+          const ctx = canvas.getContext("2d");
+
+          ctx.fillStyle = "#2563EB";
+          ctx.fillRect(0, 0, 512, 512);
+
+          const roundRect = (x, y, w, h, r, color) => {
+            ctx.fillStyle = color;
+            ctx.beginPath();
+            ctx.moveTo(x + r, y);
+            ctx.lineTo(x + w - r, y);
+            ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+            ctx.lineTo(x + w, y + h - r);
+            ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+            ctx.lineTo(x + r, y + h);
+            ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+            ctx.lineTo(x, y + r);
+            ctx.quadraticCurveTo(x, y, x + r, y);
+            ctx.closePath();
+            ctx.fill();
+          };
+
+          roundRect(36, 36, 440, 440, 96, "#FFFFFF");
+          roundRect(144, 238, 224, 24, 12, "#2563EB");
+          roundRect(88, 218, 14, 76, 7, "#31333F");
+          roundRect(112, 202, 16, 108, 7, "#31333F");
+          roundRect(394, 218, 14, 76, 7, "#31333F");
+          roundRect(408, 202, 16, 108, 7, "#31333F");
+          roundRect(245, 268, 22, 94, 10, "#31333F");
+          ctx.fillStyle = "#2563EB";
+          ctx.beginPath();
+          ctx.arc(256, 374, 52, 0, Math.PI * 2);
+          ctx.fill();
+
+          const iconUrl = canvas.toDataURL("image/png");
+          const wrapper = doc.createElement("div");
+          wrapper.id = "health-tracker-icons";
+
+          const favicon = doc.createElement("link");
+          favicon.rel = "icon";
+          favicon.href = iconUrl;
+          wrapper.appendChild(favicon);
+
+          const appleIcon = doc.createElement("link");
+          appleIcon.rel = "apple-touch-icon";
+          appleIcon.href = iconUrl;
+          wrapper.appendChild(appleIcon);
+
+          doc.head.appendChild(wrapper);
+        })();
+        </script>
+        """,
+        height=0,
+        width=0,
+    )
+
+
+inject_app_icons()
 
 st.markdown(
     f"""
