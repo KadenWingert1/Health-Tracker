@@ -37,10 +37,10 @@ st.markdown(
             padding-top: 1rem;
             padding-bottom: 4rem;
         }}
-        html, body, [class*="css"] {{
+        html, body {{
             color: {TEXT_COLOR};
         }}
-        h1, h2, h3, p, label, span, div {{
+        h1, h2, h3, p, label {{
             color: {TEXT_COLOR};
         }}
         div[data-testid="stForm"],
@@ -57,8 +57,6 @@ st.markdown(
         section[data-testid="stSidebar"] {{
             background: {SECONDARY_BG};
         }}
-        div[data-baseweb="input"] > div,
-        div[data-baseweb="select"] > div,
         textarea,
         input {{
             background: {BG_COLOR} !important;
@@ -137,9 +135,12 @@ def themed_line_chart(
     y: str,
     color: str | None = None,
     y_label: str = "",
+    markers: bool = True,
 ) -> None:
-    fig = px.line(df, x=x, y=y, color=color, markers=True, labels={y: y_label, x: "Date"})
-    fig.update_traces(line={"width": 3}, marker={"size": 8})
+    fig = px.line(df, x=x, y=y, color=color, markers=markers, labels={y: y_label, x: "Date"})
+    trace_style = {"width": 3}
+    marker_style = {"size": 8} if markers else None
+    fig.update_traces(line=trace_style, marker=marker_style)
     fig.update_layout(
         height=360,
         paper_bgcolor=BG_COLOR,
@@ -152,7 +153,56 @@ def themed_line_chart(
     )
     fig.update_xaxes(showgrid=False)
     fig.update_yaxes(gridcolor="#E4E7EC")
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(
+        fig,
+        width="stretch",
+        config={
+            "displaylogo": False,
+            "modeBarButtonsToRemove": [
+                "zoom2d",
+                "pan2d",
+                "select2d",
+                "lasso2d",
+                "zoomIn2d",
+                "zoomOut2d",
+                "autoScale2d",
+                "resetScale2d",
+                "toggleSpikelines",
+                "hoverClosestCartesian",
+                "hoverCompareCartesian",
+            ],
+            "scrollZoom": False,
+            "responsive": True,
+        },
+    )
+
+
+def build_weight_chart_view(df: pd.DataFrame, range_key: str) -> tuple[pd.DataFrame, str, bool]:
+    chart_df = filter_range(df, range_key).copy()
+    chart_df["date"] = pd.to_datetime(chart_df["date"])
+    chart_df["weight"] = pd.to_numeric(chart_df["weight"])
+
+    if range_key in {"Week", "Month"}:
+        return chart_df, "Daily Weight (lb)", True
+
+    if range_key == "Year":
+        weekly = (
+            chart_df.set_index("date")
+            .resample("W")
+            .agg(weight=("weight", "mean"))
+            .dropna()
+            .reset_index()
+        )
+        return weekly, "Weekly Avg Weight (lb)", False
+
+    monthly = (
+        chart_df.set_index("date")
+        .resample("ME")
+        .agg(weight=("weight", "mean"))
+        .dropna()
+        .reset_index()
+    )
+    return monthly, "Monthly Avg Weight (lb)", False
 
 
 def calculate_weight_insights(df: pd.DataFrame) -> dict[str, str]:
@@ -209,6 +259,23 @@ def render_lift_rows(summary_df: pd.DataFrame) -> None:
         )
 
 
+def lift_toggle_selector(label: str, key_prefix: str) -> list[str]:
+    st.caption(label)
+    col1, col2, col3 = st.columns(3)
+    bench = col1.toggle("Bench", value=True, key=f"{key_prefix}_bench")
+    squat = col2.toggle("Squat", value=True, key=f"{key_prefix}_squat")
+    deadlift = col3.toggle("Deadlift", value=True, key=f"{key_prefix}_deadlift")
+
+    selected: list[str] = []
+    if bench:
+        selected.append("Bench")
+    if squat:
+        selected.append("Squat")
+    if deadlift:
+        selected.append("Deadlift")
+    return selected
+
+
 st.title("Health Tracker")
 st.caption("Accessible, mobile-friendly tracking for bodyweight and strength.")
 
@@ -250,9 +317,19 @@ with weights_tab:
             default="Month",
             selection_mode="single",
         )
-        weight_chart_df = filter_range(weights_df, range_key).copy()
-        weight_chart_df["date"] = pd.to_datetime(weight_chart_df["date"])
-        themed_line_chart(weight_chart_df, x="date", y="weight", y_label="Weight (lb)")
+        weight_chart_df, y_label, show_markers = build_weight_chart_view(weights_df, range_key)
+        themed_line_chart(
+            weight_chart_df,
+            x="date",
+            y="weight",
+            y_label=y_label,
+            markers=show_markers,
+        )
+
+        if range_key == "Year":
+            st.caption("Year view shows weekly averages to keep the trend readable.")
+        elif range_key == "All Time":
+            st.caption("All Time view shows monthly averages so the long-term trend is easier to read.")
 
     st.subheader("Edit Weight Entries")
     editable_weights = weights_df.copy()
@@ -261,7 +338,7 @@ with weights_tab:
 
     edited_weights = st.data_editor(
         editable_weights,
-        use_container_width=True,
+        width="stretch",
         num_rows="dynamic",
         hide_index=True,
         column_config={
@@ -272,7 +349,7 @@ with weights_tab:
         },
     )
 
-    if st.button("Save Weight Table", use_container_width=True):
+    if st.button("Save Weight Table", width="stretch"):
         try:
             to_save = edited_weights.copy()
             to_save["date"] = pd.to_datetime(to_save["date"], errors="coerce").dt.date
@@ -319,12 +396,7 @@ with lifts_tab:
         lift_summary = calculate_lift_summary(lifts_df)
         render_lift_rows(lift_summary)
 
-        selected_lifts = st.multiselect(
-            "Show lifts on chart",
-            options=["Bench", "Squat", "Deadlift"],
-            default=["Bench", "Squat", "Deadlift"],
-            key="chart_lift_selector",
-        )
+        selected_lifts = lift_toggle_selector("Show lifts on chart", "chart_lifts")
 
         filtered_lifts = lifts_df[lifts_df["lift"].isin(selected_lifts)].copy()
         if filtered_lifts.empty:
@@ -341,28 +413,18 @@ with lifts_tab:
             )
 
         st.subheader("Lifting History")
-        history_selection = st.multiselect(
-            "Choose lifts to view and edit",
-            options=["Bench", "Squat", "Deadlift"],
-            default=["Bench", "Squat", "Deadlift"],
-            key="history_lift_selector",
-        )
+        history_selection = lift_toggle_selector("Choose lifts to view", "history_lifts")
         visible_lifts = lifts_df[lifts_df["lift"].isin(history_selection)].copy()
         st.dataframe(
             visible_lifts.reset_index(drop=True),
-            use_container_width=True,
+            width="stretch",
             hide_index=True,
         )
 
     st.subheader("Edit Lifting Entries")
     editable_lifts = lifts_df.copy()
     if not editable_lifts.empty:
-        selected_for_editing = st.multiselect(
-            "Choose lifts to edit",
-            options=["Bench", "Squat", "Deadlift"],
-            default=["Bench", "Squat", "Deadlift"],
-            key="edit_lift_selector",
-        )
+        selected_for_editing = lift_toggle_selector("Choose lifts to edit", "edit_lifts")
         editable_lifts = editable_lifts[editable_lifts["lift"].isin(selected_for_editing)].copy()
 
     if not editable_lifts.empty:
@@ -370,7 +432,7 @@ with lifts_tab:
 
     edited_lifts = st.data_editor(
         editable_lifts,
-        use_container_width=True,
+        width="stretch",
         num_rows="dynamic",
         hide_index=True,
         column_config={
@@ -384,7 +446,7 @@ with lifts_tab:
         },
     )
 
-    if st.button("Save Lifting Table", use_container_width=True):
+    if st.button("Save Lifting Table", width="stretch"):
         try:
             edited_subset = edited_lifts.copy()
             edited_subset["date"] = pd.to_datetime(edited_subset["date"], errors="coerce").dt.date
